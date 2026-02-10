@@ -13,12 +13,14 @@ import org.example.touragency.repository.UserRepository;
 import org.example.touragency.service.abstractions.BookingService;
 import org.example.touragency.service.abstractions.TourService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
 @RequiredArgsConstructor
 @Service
+@Transactional(readOnly = true)
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
@@ -27,6 +29,7 @@ public class BookingServiceImpl implements BookingService {
     private final TourService tourService;
 
     @Override
+    @Transactional
     public BookingResponseDto addBooking(UUID userId, UUID tourId) {
 
         User user = userRepository.findById(userId)
@@ -40,7 +43,7 @@ public class BookingServiceImpl implements BookingService {
         }
 
         boolean alreadyBooked =
-                bookingRepository.findBookingByUserAndTourId(userId, tourId).isPresent();
+                bookingRepository.findByUserIdAndTourId(userId, tourId).isPresent();
 
         if (alreadyBooked) {
             throw new ConflictException("User already booked this tour");
@@ -68,7 +71,7 @@ public class BookingServiceImpl implements BookingService {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        List<Booking> bookings = bookingRepository.findAllBookingsByUserId(user.getId());
+        List<Booking> bookings = bookingRepository.findByUserId(user.getId());
 
         return bookings.stream()
                 .map(b -> new BookingResponseDto(
@@ -81,9 +84,10 @@ public class BookingServiceImpl implements BookingService {
 
 
     @Override
+    @Transactional
     public void cancelBooking(UUID userId, UUID tourId) {
 
-        bookingRepository.findBookingByUserAndTourId(userId, tourId)
+        bookingRepository.findByUserIdAndTourId(userId, tourId)
                 .orElseThrow(() -> new NotFoundException("Booking not found"));
 
         tourService.tourBookingIsCanceled(tourId);

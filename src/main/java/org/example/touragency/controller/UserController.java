@@ -1,13 +1,15 @@
 package org.example.touragency.controller;
 
 import lombok.RequiredArgsConstructor;
-import org.example.touragency.dto.request.UserAddDto;
+import org.apache.catalina.security.SecurityUtil;
 import org.example.touragency.dto.response.UserResponseDto;
 import org.example.touragency.dto.response.UserUpdateDto;
+import org.example.touragency.security.SecurityUtils;
 import org.example.touragency.service.abstractions.UserService;
 import org.example.touragency.exception.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.context.SecurityContext;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -20,10 +22,11 @@ public class UserController {
 
     private final UserService userService;
 
-    @PostMapping()
-    public ResponseEntity<ApiResponse<UserResponseDto>> addNewUser(@RequestBody UserAddDto userAddDto) {
-        UserResponseDto newUser = userService.addNewUser(userAddDto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(newUser));
+    @PostMapping("/become-agency")
+    public ResponseEntity<ApiResponse<UserResponseDto>> becomeAgency() {
+        UUID currentUserId = SecurityUtils.getCurrentUserId();
+        UserResponseDto updatedUser = userService.addNewAgency(currentUserId);
+        return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(updatedUser));
     }
 
     @GetMapping()

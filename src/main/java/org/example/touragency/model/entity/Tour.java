@@ -1,5 +1,6 @@
 package org.example.touragency.model.entity;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 import org.example.touragency.model.base.BaseEntity;
@@ -18,6 +19,7 @@ public class Tour extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "agency_id", nullable = false)
+    @JsonIgnore
     private User agency;
 
     @Column(nullable = false)

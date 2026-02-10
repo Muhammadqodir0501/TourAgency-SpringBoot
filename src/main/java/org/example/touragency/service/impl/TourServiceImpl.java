@@ -15,6 +15,7 @@ import org.example.touragency.repository.*;
 import org.example.touragency.service.abstractions.TourService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
@@ -25,6 +26,7 @@ import java.util.UUID;
 
 @Service
 @RequiredArgsConstructor
+@Transactional(readOnly = true)
 public class TourServiceImpl implements TourService {
 
     private final TourRepository tourRepository;
@@ -37,6 +39,7 @@ public class TourServiceImpl implements TourService {
 
     @PreAuthorize("hasRole('AGENCY')")
     @Override
+    @Transactional
     public TourResponseDto addNewTour(UUID agencyId, TourAddDto tourAddDto) {
 
         Optional<User> agency = userRepository.findById(agencyId);
@@ -76,6 +79,7 @@ public class TourServiceImpl implements TourService {
 
     @PreAuthorize("hasRole('AGENCY')")
     @Override
+    @Transactional
     public void deleteTour(UUID agencyId, UUID tourId) {
         Optional<User> agency = userRepository.findById(agencyId);
 
@@ -87,10 +91,10 @@ public class TourServiceImpl implements TourService {
             throw new ForbiddenException("User is not an agency");
         }
 
-        ratingRepository.deleteAllRatingsIfTourDeleted(tourId);
-        ratingRepository.deleteAllCountersIfTourDeleted(tourId);
-        favTourRepository.deleteAllIfTourDeleted(tourId);
-        bookingRepository.deleteAllIfTourDeleted(tourId);
+        ratingRepository.deleteByTourId(tourId);
+        ratingRepository.deleteByTourId(tourId);
+        favTourRepository.deleteByTourId(tourId);
+        bookingRepository.deleteByTourId(tourId);
         tourRepository.deleteById(tourId);
 
     }
@@ -98,6 +102,7 @@ public class TourServiceImpl implements TourService {
 
     @PreAuthorize("hasRole('AGENCY')")
     @Override
+    @Transactional
     public TourResponseDto updateTour(UUID agencyId, UUID tourId, TourUpdateDto tourUpdateDto) {
 
         Optional<Tour> existingTour = tourRepository.findById(tourId);
@@ -121,7 +126,7 @@ public class TourServiceImpl implements TourService {
         existingTour.get().setReturnDate(tourUpdateDto.getReturnDate());
         existingTour.get().setNights(nights);
         existingTour.get().setHotel(tourUpdateDto.getHotel());
-        tourRepository.update(existingTour.get());
+        tourRepository.save(existingTour.get());
         return toResponseDto(existingTour.get());
     }
 
@@ -166,16 +171,18 @@ public class TourServiceImpl implements TourService {
     }
 
     @Override
+    @Transactional
     public void tourIsBooked(Tour tour) {
         if(tour.isAvailable()) {
             tour.setSeatsAvailable(tour.getSeatsAvailable() - 1);
             if(tour.getSeatsAvailable() == 0){
                 tour.setAvailable(false);
             }
-            tourRepository.update(tour);
+            tourRepository.save(tour);
         }
     }
     @Override
+    @Transactional
     public void tourBookingIsCanceled(UUID tourId) {
         Optional<Tour> tour = tourRepository.findById(tourId);
 
@@ -187,11 +194,12 @@ public class TourServiceImpl implements TourService {
             tour.get().setAvailable(true);
         }
         tour.get().setSeatsAvailable(tour.get().getSeatsAvailable() + 1);
-        tourRepository.update(tour.get());
+        tourRepository.save(tour.get());
     }
 
     @PreAuthorize("hasRole('AGENCY')")
     @Override
+    @Transactional
     public TourResponseDto addDiscount(UUID agencyId, UUID tourId, Integer discountPercent) {
         Optional<User> admin =  userRepository.findById(agencyId);
         Optional<Tour> tour = tourRepository.findById(tourId);
@@ -212,7 +220,7 @@ public class TourServiceImpl implements TourService {
                         BigDecimal.valueOf(100f - discountPercent)
                 ).divide(BigDecimal.valueOf(100f))
         );
-        tourRepository.update(tour.get());
+        tourRepository.save(tour.get());
         return toResponseDto(tour.orElse(null));
 
     }

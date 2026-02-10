@@ -2,46 +2,21 @@ package org.example.touragency.repository;
 
 import org.example.touragency.model.entity.RefreshToken;
 import org.example.touragency.model.entity.User;
-import org.hibernate.SessionFactory;
+import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
-public class RefreshTokenRepository extends AbstractHibernateRepository{
+public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID> {
 
-    public RefreshTokenRepository(SessionFactory sessionFactory) {
-        super(sessionFactory);
-    }
+     Optional<RefreshToken> findByToken(String token);
 
-    public RefreshToken save(RefreshToken refreshToken) {
-        return executeInTransaction(session -> {
-            session.persist(refreshToken);
-            return refreshToken;
-        });
-    }
-    public Optional<RefreshToken> findByToken(String token) {
-        return executeInTransaction(session ->
-                session.createQuery("FROM RefreshToken rt WHERE rt.token = :token", RefreshToken.class)
-                        .setParameter("token", token)
-                        .uniqueResultOptional()
-        );
-    }
+    Optional<RefreshToken> findByUser(User user);
 
-    public void deleteByUser(User user) {
-        executeInTransactionVoid(session ->
-                session.createMutationQuery("DELETE FROM RefreshToken rt WHERE rt.user = :user")
-                        .setParameter("user", user)
-                        .executeUpdate()
-        );
-    }
+     void deleteByUser(User user);
 
-    public void deleteExpired(Instant now) {
-        executeInTransactionVoid(session ->
-                session.createMutationQuery("DELETE FROM RefreshToken rt WHERE rt.expiryDate < :now")
-                        .setParameter("now", now)
-                        .executeUpdate()
-        );
-    }
+     void deleteByExpiryDateBefore(Instant now);
 }

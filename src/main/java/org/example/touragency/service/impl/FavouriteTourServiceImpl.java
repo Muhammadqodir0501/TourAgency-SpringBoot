@@ -12,12 +12,14 @@ import org.example.touragency.repository.TourRepository;
 import org.example.touragency.repository.UserRepository;
 import org.example.touragency.service.abstractions.FavouriteTourService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
 
 @RequiredArgsConstructor
 @Service
+@Transactional(readOnly = true)
 public class FavouriteTourServiceImpl implements FavouriteTourService {
 
     private final FavTourRepository favTourRepository;
@@ -26,6 +28,7 @@ public class FavouriteTourServiceImpl implements FavouriteTourService {
 
 
     @Override
+    @Transactional
     public FavTourResponseDto addFavouriteTour(UUID  userId, UUID tourId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
@@ -34,7 +37,7 @@ public class FavouriteTourServiceImpl implements FavouriteTourService {
                 .orElseThrow(() -> new NotFoundException("Tour not found"));
 
         boolean alreadyLiked =
-                favTourRepository.findByUserAndTourId(userId, tourId).isPresent();
+                favTourRepository.findByUserIdAndTourId(userId, tourId).isPresent();
 
         if (alreadyLiked) {
             throw new ConflictException("User already added this tour to the favourite list");
@@ -55,6 +58,7 @@ public class FavouriteTourServiceImpl implements FavouriteTourService {
     }
 
     @Override
+    @Transactional
     public void deleteFavouriteTour(UUID userId, UUID tourId) {
 
         tourRepository.findById(tourId)
@@ -72,7 +76,7 @@ public class FavouriteTourServiceImpl implements FavouriteTourService {
         userRepository.findById(userId)
                 .orElseThrow(() -> new NotFoundException("User not found"));
 
-        List<FavouriteTour> favouriteTours = favTourRepository.findAllByUserId(userId);
+        List<FavouriteTour> favouriteTours = favTourRepository.findByUserId(userId);
 
         return favouriteTours.stream()
                 .map(f -> new FavTourResponseDto(

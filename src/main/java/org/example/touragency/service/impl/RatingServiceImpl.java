@@ -8,20 +8,24 @@ import org.example.touragency.model.entity.Rating;
 import org.example.touragency.model.entity.RatingCounter;
 import org.example.touragency.model.entity.Tour;
 import org.example.touragency.model.entity.User;
+import org.example.touragency.repository.RatingCounterRepository;
 import org.example.touragency.repository.RatingRepository;
 import org.example.touragency.repository.TourRepository;
 import org.example.touragency.repository.UserRepository;
 import org.example.touragency.service.abstractions.RatingService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
 import java.util.UUID;
 
 @RequiredArgsConstructor
 @Service
+@Transactional
 public class RatingServiceImpl implements RatingService {
 
     private final RatingRepository ratingRepository;
+    private final RatingCounterRepository ratingCounterRepository;
     private final TourRepository tourRepository;
     private final UserRepository userRepository;
 
@@ -32,7 +36,7 @@ public class RatingServiceImpl implements RatingService {
         UUID userId = ratingDto.getUserId();
 
         Rating existRating = ratingRepository
-                .findRatingByUserAndTourIds(userId, tourId)
+                .findByUserIdAndTourId(userId, tourId)
                 .orElse(null);
 
         Tour tour = tourRepository.findById(tourId)
@@ -53,7 +57,7 @@ public class RatingServiceImpl implements RatingService {
                 .rate(ratingDto.getRate())
                 .build();
 
-        ratingRepository.saveRating(rating);
+        ratingRepository.save(rating);
         ratingCount(ratingDto);
         syncTourRatingFromCounter(tourId);
 
@@ -66,7 +70,7 @@ public class RatingServiceImpl implements RatingService {
         UUID tourId = ratingDto.getTourId();
 
         Optional<RatingCounter> optionalCounter =
-                ratingRepository.findRatingCounterByTourId(tourId);
+                ratingCounterRepository.findByTourId(tourId);
 
         if (optionalCounter.isPresent()) {
             RatingCounter counter = optionalCounter.get();
@@ -79,7 +83,7 @@ public class RatingServiceImpl implements RatingService {
             counter.setAverageRating(newAvg);
             counter.setRatingAmount(counter.getRatingAmount() + 1);
 
-            ratingRepository.updateCounter(counter);
+            ratingCounterRepository.save(counter);
         } else {
             RatingCounter counter = RatingCounter.builder()
                     .tourId(tourId)
@@ -87,14 +91,14 @@ public class RatingServiceImpl implements RatingService {
                     .ratingAmount(1)
                     .build();
 
-            ratingRepository.saveCounter(counter);
+            ratingCounterRepository.save(counter);
         }
     }
 
 
     @Override
     public void updateExistRating(RatingDto ratingDto, Rating existRating) {
-        Optional<RatingCounter> counter = ratingRepository.findRatingCounterByTourId(existRating.getTourId());
+        Optional<RatingCounter> counter = ratingCounterRepository.findByTourId(existRating.getTourId());
 
         if(counter.isPresent()){
             float newAvg = (counter.get().getAverageRating() * counter.get().getRatingAmount()
@@ -102,10 +106,10 @@ public class RatingServiceImpl implements RatingService {
                     / counter.get().getRatingAmount();
 
             counter.get().setAverageRating(newAvg);
-            ratingRepository.updateCounter(counter.get());
+            ratingCounterRepository.save(counter.get());
 
             existRating.setRate(ratingDto.getRate());
-            ratingRepository.updateRating(existRating);
+            ratingRepository.save(existRating);
 
         }
     }
@@ -113,7 +117,7 @@ public class RatingServiceImpl implements RatingService {
 
     private void syncTourRatingFromCounter(UUID tourId) {
         Tour tour = tourRepository.findById(tourId).orElse(null);
-        RatingCounter counter = ratingRepository.findRatingCounterByTourId(tourId).orElse(null);
+        RatingCounter counter = ratingCounterRepository.findByTourId(tourId).orElse(null);
 
         if (tour == null) return;
 
@@ -123,7 +127,7 @@ public class RatingServiceImpl implements RatingService {
             tour.setRating(0);
         }
 
-        tourRepository.update(tour);
+        tourRepository.save(tour);
     }
 
     private RatingResponseDto toResponseDto(Rating rating) {

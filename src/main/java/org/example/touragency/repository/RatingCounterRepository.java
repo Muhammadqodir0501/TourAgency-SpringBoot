@@ -1,6 +1,6 @@
 package org.example.touragency.repository;
 
-import org.example.touragency.model.entity.Rating;
+import org.example.touragency.model.entity.RatingCounter;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 
@@ -8,13 +8,9 @@ import java.util.Optional;
 import java.util.UUID;
 
 @Repository
-public interface RatingRepository extends JpaRepository<Rating, UUID> {
+public interface RatingCounterRepository extends JpaRepository<RatingCounter, UUID> {
 
-    Optional<Rating> findByUserIdAndTourId(UUID userId, UUID tourId);
+    Optional<RatingCounter> findByTourId(UUID tourId);
 
     void deleteByTourId(UUID tourId);
-
-    void deleteByUserId(UUID userId);
-
-
 }

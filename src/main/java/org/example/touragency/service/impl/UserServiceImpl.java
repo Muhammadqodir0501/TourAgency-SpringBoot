@@ -1,7 +1,7 @@
 package org.example.touragency.service.impl;
 
 import lombok.RequiredArgsConstructor;
-import org.example.touragency.dto.request.UserAddDto;
+import org.example.touragency.dto.request.RegisterRequest;
 import org.example.touragency.dto.response.UserResponseDto;
 import org.example.touragency.dto.response.UserUpdateDto;
 import org.example.touragency.exception.BadRequestException;
@@ -12,7 +12,9 @@ import org.example.touragency.model.entity.Tour;
 import org.example.touragency.model.entity.User;
 import org.example.touragency.repository.*;
 import org.example.touragency.service.abstractions.*;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
@@ -20,6 +22,7 @@ import java.util.UUID;
 
 @RequiredArgsConstructor
 @Service
+@Transactional(readOnly = true)
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
@@ -27,33 +30,48 @@ public class UserServiceImpl implements UserService {
     private final FavTourRepository favTourRepository;
     private final BookingRepository bookingRepository;
     private final TourRepository tourRepository;
+    private final RatingCounterRepository ratingCounterRepository;
+    private final PasswordEncoder passwordEncoder;
 
+
+    @Transactional
     @Override
-    public UserResponseDto addNewUser(UserAddDto dto) {
-        if (dto == null) {
+    public User register(RegisterRequest request) {
+        if (request == null) {
             throw new BadRequestException("UserAddDto cannot be null");
         }
-        if (userRepository.findByPhoneNumber(dto.getPhoneNumber()).isPresent()) {
+        if (userRepository.findByPhoneNumber(request.getPhoneNumber()).isPresent()) {
             throw new ConflictException("The phone number already exists");
         }
 
-        if (userRepository.findByEmail(dto.getEmail()).isPresent()) {
+        if (userRepository.findByEmail(request.getEmail()).isPresent()) {
             throw new ConflictException("The email already exists");
         }
 
         User newUser = User.builder()
-                .fullName(dto.getFullName())
-                .email(dto.getEmail())
-                .password(dto.getPassword())
-                .phoneNumber(dto.getPhoneNumber())
-                .role(dto.getRole())
+                .fullName(request.getFullName())
+                .email(request.getEmail())
+                .password(passwordEncoder.encode(request.getPassword()))
+                .phoneNumber(request.getPhoneNumber())
+                .role(Role.USER)
                 .build();
 
-        userRepository.save(newUser);
-        return toResponseDto(newUser);
+        return userRepository.save(newUser);
     }
 
     @Override
+    @Transactional
+    public UserResponseDto addNewAgency(UUID agencyId) {
+        User agency = userRepository.findById(agencyId)
+                .orElseThrow(() -> new NotFoundException("Agency not found"));
+
+        agency.setRole(Role.AGENCY);
+        userRepository.save(agency);
+        return toResponseDto(agency);
+    }
+
+    @Override
+    @Transactional
     public void deleteUser(UUID userId) {
         if (userId == null) {
             throw new BadRequestException("UserId cannot be null");
@@ -66,17 +84,17 @@ public class UserServiceImpl implements UserService {
                 List<Tour> tours = tourRepository.findByAgencyId(user.getId());
 
                 for (Tour tour : tours) {
-                    bookingRepository.deleteAllIfTourDeleted(tour.getId());
-                    favTourRepository.deleteAllIfTourDeleted(tour.getId());
-                    ratingRepository.deleteAllRatingsIfTourDeleted(tour.getId());
-                    ratingRepository.deleteAllCountersIfTourDeleted(tour.getId());
+                    bookingRepository.deleteByTourId(tour.getId());
+                    favTourRepository.deleteByTourId(tour.getId());
+                    ratingCounterRepository.deleteByTourId(tour.getId());
+                    ratingRepository.deleteByTourId(tour.getId());
                 }
 
-                tourRepository.deleteAllByAgencyId(user.getId());
+                tourRepository.deleteByAgencyId(user.getId());
             }
-            ratingRepository.deleteAllIfUserDeleted(userId);
-            favTourRepository.deleteAllIfUserDeleted(userId);
-            bookingRepository.deleteAllIfUserDeleted(userId);
+            ratingRepository.deleteByUserId(userId);
+            favTourRepository.deleteByUserId(userId);
+            bookingRepository.deleteByUserId(userId);
 
             userRepository.deleteById(userId);
         });
@@ -84,6 +102,7 @@ public class UserServiceImpl implements UserService {
 
 
     @Override
+    @Transactional
     public UserResponseDto updateUser(UUID userId, UserUpdateDto dto) {
 
         if (userId == null || dto == null) {
@@ -110,7 +129,7 @@ public class UserServiceImpl implements UserService {
         user.setPassword(dto.getPassword());
         user.setPhoneNumber(dto.getPhoneNumber());
 
-        userRepository.update(user);
+        userRepository.save(user);
         return toResponseDto(user);
     }
 
