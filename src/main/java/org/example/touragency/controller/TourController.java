@@ -21,9 +21,8 @@ public class TourController {
     private final TourService tourService;
 
     @PostMapping()
-    public ResponseEntity<ApiResponse<TourResponseDto>> addNewTour(@PathVariable UUID agencyId,
-                                                     @RequestBody TourAddDto tourAddDto) {
-        TourResponseDto createdTour = tourService.addNewTour(agencyId, tourAddDto);
+    public ResponseEntity<ApiResponse<TourResponseDto>> addNewTour(@RequestBody TourAddDto tourAddDto) {
+        TourResponseDto createdTour = tourService.addNewTour(tourAddDto);
         return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(createdTour));
 
     }

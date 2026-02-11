@@ -1,6 +1,7 @@
 package org.example.touragency.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import org.example.touragency.dto.event.TourCreatedEvent;
 import org.example.touragency.dto.request.TourAddDto;
 import org.example.touragency.dto.response.TourResponseDto;
 import org.example.touragency.dto.response.TourUpdateDto;
@@ -12,7 +13,9 @@ import org.example.touragency.model.Role;
 import org.example.touragency.model.entity.Tour;
 import org.example.touragency.model.entity.User;
 import org.example.touragency.repository.*;
+import org.example.touragency.security.SecurityUtils;
 import org.example.touragency.service.abstractions.TourService;
+import org.example.touragency.service.rabbitmq.MessageProducer;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,21 +37,21 @@ public class TourServiceImpl implements TourService {
     private final RatingRepository ratingRepository;
     private final FavTourRepository favTourRepository;
     private final BookingRepository bookingRepository;
+    private final MessageProducer messageProducer;
 
 
 
     @PreAuthorize("hasRole('AGENCY')")
     @Override
     @Transactional
-    public TourResponseDto addNewTour(UUID agencyId, TourAddDto tourAddDto) {
+    public TourResponseDto addNewTour(TourAddDto tourAddDto) {
 
-        Optional<User> agency = userRepository.findById(agencyId);
+        UUID currentAgencyId = SecurityUtils.getCurrentUserId();
 
-        if (agency.isEmpty()) {
-            throw new NotFoundException("Agency not found");
-        }
+        User agency = userRepository.findById(currentAgencyId)
+                .orElseThrow(() -> new NotFoundException("Agency not found"));
 
-        if (!agency.get().getRole().equals(Role.AGENCY)) {
+        if (!agency.getRole().equals(Role.AGENCY)) {
             throw new ConflictException("User is not an agency");
         }
 
@@ -57,7 +60,7 @@ public class TourServiceImpl implements TourService {
 
         Tour newTour = Tour.builder()
                 .title(tourAddDto.getTitle())
-                .agency(agency.get())
+                .agency(agency)
                 .city(tourAddDto.getCity())
                 .hotel(tourAddDto.getHotel())
                 .description(tourAddDto.getDescription())
@@ -72,7 +75,17 @@ public class TourServiceImpl implements TourService {
                 .build();
 
                  tourRepository.save(newTour);
-                 return toResponseDto(newTour);
+
+        TourCreatedEvent event = TourCreatedEvent.builder()
+                .tourTitle(newTour.getTitle())
+                .city(newTour.getCity())
+                .price(newTour.getPrice())
+                .startDate(newTour.getStartDate())
+                .authorEmail(newTour.getAgency().getEmail())
+                .build();
+
+        messageProducer.sendTourCreatedMessage(event);
+        return toResponseDto(newTour);
 
     }
 

@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.UUID;
 
 public interface TourService {
-    TourResponseDto addNewTour(UUID agencyId, TourAddDto tourAddDto);
+    TourResponseDto addNewTour(TourAddDto tourAddDto);
 
     void deleteTour(UUID agencyId, UUID tourId);
 

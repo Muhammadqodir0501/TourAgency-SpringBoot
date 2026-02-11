@@ -1,4 +1,4 @@
-package org.example.touragency.config;
+/*package org.example.touragency.config;
 
 import lombok.RequiredArgsConstructor;
 import org.example.touragency.model.Role;
@@ -46,4 +46,4 @@ public class AdminInitializer implements CommandLineRunner {
             System.out.println("✅ Новый админ создан успешно.");
         }
     }
-}
+}*/
