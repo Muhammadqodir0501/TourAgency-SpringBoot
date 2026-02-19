@@ -1,27 +1,32 @@
 package org.example.touragency.service.impl;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import org.example.touragency.dto.event.TourCreatedEvent;
+import lombok.extern.slf4j.Slf4j;
+import org.example.touragency.dto.event.SystemEvent;
 import org.example.touragency.dto.request.TourAddDto;
 import org.example.touragency.dto.response.TourResponseDto;
 import org.example.touragency.dto.response.TourUpdateDto;
+import org.example.touragency.enums.EventStatus;
+import org.example.touragency.enums.EventType;
 import org.example.touragency.exception.BadRequestException;
 import org.example.touragency.exception.ConflictException;
 import org.example.touragency.exception.ForbiddenException;
 import org.example.touragency.exception.NotFoundException;
-import org.example.touragency.model.Role;
+import org.example.touragency.enums.Role;
+import org.example.touragency.model.entity.OutboxEvent;
 import org.example.touragency.model.entity.Tour;
 import org.example.touragency.model.entity.User;
 import org.example.touragency.repository.*;
 import org.example.touragency.security.SecurityUtils;
 import org.example.touragency.service.abstractions.TourService;
-import org.example.touragency.service.rabbitmq.MessageProducer;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Optional;
@@ -30,6 +35,7 @@ import java.util.UUID;
 @Service
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
+@Slf4j
 public class TourServiceImpl implements TourService {
 
     private final TourRepository tourRepository;
@@ -37,7 +43,9 @@ public class TourServiceImpl implements TourService {
     private final RatingRepository ratingRepository;
     private final FavTourRepository favTourRepository;
     private final BookingRepository bookingRepository;
-    private final MessageProducer messageProducer;
+    private final OutboxEventRepository outboxEventRepository;
+    private final ObjectMapper objectMapper;
+
 
 
 
@@ -57,7 +65,6 @@ public class TourServiceImpl implements TourService {
 
         int nights = calculatingNights(tourAddDto.getStartDate(), tourAddDto.getReturnDate());
 
-
         Tour newTour = Tour.builder()
                 .title(tourAddDto.getTitle())
                 .agency(agency)
@@ -76,15 +83,30 @@ public class TourServiceImpl implements TourService {
 
                  tourRepository.save(newTour);
 
-        TourCreatedEvent event = TourCreatedEvent.builder()
-                .tourTitle(newTour.getTitle())
-                .city(newTour.getCity())
-                .price(newTour.getPrice())
-                .startDate(newTour.getStartDate())
-                .authorEmail(newTour.getAgency().getEmail())
-                .build();
+        try{
+            SystemEvent systemEvent = SystemEvent.builder()
+                    .eventType(EventType.TOUR_CREATED)
+                    .entityId(String.valueOf(newTour.getId()))
+                    .userId(agency.getId())
+                    .timestamp(LocalDateTime.now())
+                    .payload(newTour)
+                    .build();
 
-        messageProducer.sendTourCreatedMessage(event);
+            OutboxEvent outboxEvent = new OutboxEvent();
+                    outboxEvent.setEventType(EventType.TOUR_CREATED);
+                    outboxEvent.setStatus(EventStatus.PENDING);
+                    outboxEvent.setPayload(objectMapper.writeValueAsString(systemEvent));
+                    outboxEvent.setCreatedAt(LocalDateTime.now());
+
+            outboxEventRepository.save(outboxEvent);
+
+            log.info("Tour created and outbox event saved for tour ID: {}", newTour.getId());
+
+        } catch(Exception e){
+            log.error("Failed to save outbox event for tour ID: {}", newTour.getId(), e);
+            throw new RuntimeException("Could not process tour creation", e);
+        }
+
         return toResponseDto(newTour);
 
     }
@@ -141,6 +163,9 @@ public class TourServiceImpl implements TourService {
         existingTour.get().setHotel(tourUpdateDto.getHotel());
         tourRepository.save(existingTour.get());
         return toResponseDto(existingTour.get());
+
+
+
     }
 
     @Override

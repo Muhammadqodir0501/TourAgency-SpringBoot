@@ -1,7 +1,7 @@
 package org.example.touragency.dto.response;
 
 import lombok.*;
-import org.example.touragency.model.Role;
+import org.example.touragency.enums.Role;
 
 import java.util.UUID;
 

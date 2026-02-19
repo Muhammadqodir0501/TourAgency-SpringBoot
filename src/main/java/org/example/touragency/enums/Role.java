@@ -1,4 +1,4 @@
-package org.example.touragency.model;
+package org.example.touragency.enums;
 
 public enum Role {
     AGENCY,

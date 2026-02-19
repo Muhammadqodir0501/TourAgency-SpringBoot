@@ -15,7 +15,7 @@ public class RabbitConfig {
 
     public static final String QUEUE_NAME = "tour_booking_queue";
     public static final String EXCHANGE_NAME = "tour_booking_exchange";
-    public static final String ROUTING_KEY = "tour.booking.#";
+    public static final String ROUTING_KEY = "#";
 
     @Bean
     public Queue queue() {

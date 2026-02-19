@@ -2,7 +2,7 @@ package org.example.touragency.model.entity;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.example.touragency.model.Role;
+import org.example.touragency.enums.Role;
 import org.example.touragency.model.base.BaseEntity;
 
 @Entity

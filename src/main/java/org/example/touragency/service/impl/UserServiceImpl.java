@@ -7,7 +7,7 @@ import org.example.touragency.dto.response.UserUpdateDto;
 import org.example.touragency.exception.BadRequestException;
 import org.example.touragency.exception.ConflictException;
 import org.example.touragency.exception.NotFoundException;
-import org.example.touragency.model.Role;
+import org.example.touragency.enums.Role;
 import org.example.touragency.model.entity.Tour;
 import org.example.touragency.model.entity.User;
 import org.example.touragency.repository.*;
@@ -140,6 +140,7 @@ public class UserServiceImpl implements UserService {
                 .map(this::toResponseDto)
                 .toList();
     }
+
 
     @Override
     public User getUserById(UUID userId) {
