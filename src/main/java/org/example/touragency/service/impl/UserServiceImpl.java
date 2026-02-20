@@ -1,13 +1,20 @@
 package org.example.touragency.service.impl;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.example.touragency.dto.event.SystemEvent;
 import org.example.touragency.dto.request.RegisterRequest;
 import org.example.touragency.dto.response.UserResponseDto;
 import org.example.touragency.dto.response.UserUpdateDto;
+import org.example.touragency.enums.EventStatus;
+import org.example.touragency.enums.EventType;
 import org.example.touragency.exception.BadRequestException;
 import org.example.touragency.exception.ConflictException;
 import org.example.touragency.exception.NotFoundException;
 import org.example.touragency.enums.Role;
+import org.example.touragency.model.entity.OutboxEvent;
 import org.example.touragency.model.entity.Tour;
 import org.example.touragency.model.entity.User;
 import org.example.touragency.repository.*;
@@ -16,6 +23,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -23,6 +31,7 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Service
 @Transactional(readOnly = true)
+@Slf4j
 public class UserServiceImpl implements UserService {
 
     private final UserRepository userRepository;
@@ -32,10 +41,13 @@ public class UserServiceImpl implements UserService {
     private final TourRepository tourRepository;
     private final RatingCounterRepository ratingCounterRepository;
     private final PasswordEncoder passwordEncoder;
+    private final ObjectMapper objectMapper;
+    private final OutboxEventRepository outboxEventRepository;
 
 
     @Transactional
     @Override
+
     public User register(RegisterRequest request) {
         if (request == null) {
             throw new BadRequestException("UserAddDto cannot be null");
@@ -56,7 +68,34 @@ public class UserServiceImpl implements UserService {
                 .role(Role.USER)
                 .build();
 
-        return userRepository.save(newUser);
+        userRepository.save(newUser);
+
+        try{
+            SystemEvent systemEvent = SystemEvent.builder()
+                    .eventType(EventType.USER_REGISTERED)
+                    .entityId(String.valueOf(newUser.getId()))
+                    .userId(newUser.getId())
+                    .timestamp(LocalDateTime.now())
+                    .payload(newUser)
+                    .build();
+
+            OutboxEvent outboxEvent = new OutboxEvent();
+            outboxEvent.setEventType(EventType.USER_REGISTERED);
+            outboxEvent.setStatus(EventStatus.PENDING);
+            outboxEvent.setPayload(objectMapper.writeValueAsString(systemEvent));
+            outboxEvent.setCreatedAt(LocalDateTime.now());
+
+            outboxEventRepository.save(outboxEvent);
+            log.info("User created and outbox event saved for user ID: {}", newUser.getId());
+
+        } catch (Exception e) {
+
+            log.error("Error occurred while saving user event", e);
+            throw new ConflictException("Error occurred while saving user event");
+        }
+
+
+        return newUser;
     }
 
     @Override
@@ -81,7 +120,7 @@ public class UserServiceImpl implements UserService {
 
             if (user.getRole() == Role.AGENCY) {
 
-                List<Tour> tours = tourRepository.findByAgencyId(user.getId());
+                List<Tour> tours = tourRepository.findAllByAgencyId(user.getId());
 
                 for (Tour tour : tours) {
                     bookingRepository.deleteByTourId(tour.getId());

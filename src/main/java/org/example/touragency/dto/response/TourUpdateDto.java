@@ -19,7 +19,6 @@ public class TourUpdateDto {
     private String hotel;
     private String city;
     private int seatsTotal;
-    private int seatsAvailable;
     private boolean isAvailable = true;
     private float discountPercent;
 }

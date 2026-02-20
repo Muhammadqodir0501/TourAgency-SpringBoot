@@ -8,11 +8,9 @@ import java.util.*;
 @Repository
 public interface TourRepository extends JpaRepository<Tour,Long> {
 
-    void deleteById(UUID id);
-
     Optional<Tour> findById(UUID id);
 
-    List<Tour> findByAgencyId(UUID agencyId);
+    List<Tour> findAllByAgencyId(UUID agencyId);
 
     List<Tour> findAll();
 

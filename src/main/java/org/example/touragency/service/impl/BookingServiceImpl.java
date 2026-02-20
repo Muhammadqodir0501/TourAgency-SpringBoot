@@ -1,7 +1,9 @@
 package org.example.touragency.service.impl;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.example.touragency.dto.response.BookingResponseDto;
+import org.example.touragency.enums.EventType;
 import org.example.touragency.exception.ConflictException;
 import org.example.touragency.exception.NotFoundException;
 import org.example.touragency.model.entity.Booking;
@@ -11,6 +13,7 @@ import org.example.touragency.repository.BookingRepository;
 import org.example.touragency.repository.TourRepository;
 import org.example.touragency.repository.UserRepository;
 import org.example.touragency.service.abstractions.BookingService;
+import org.example.touragency.service.abstractions.OutboxService;
 import org.example.touragency.service.abstractions.TourService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,12 +24,15 @@ import java.util.UUID;
 @RequiredArgsConstructor
 @Service
 @Transactional(readOnly = true)
+@Slf4j
 public class BookingServiceImpl implements BookingService {
 
     private final BookingRepository bookingRepository;
     private final UserRepository userRepository;
     private final TourRepository tourRepository;
     private final TourService tourService;
+    private final OutboxService outboxService;
+
 
     @Override
     @Transactional
@@ -57,11 +63,20 @@ public class BookingServiceImpl implements BookingService {
         bookingRepository.save(booking);
         tourService.tourIsBooked(tour);
 
-        return new BookingResponseDto(
-                booking.getId(),
+       BookingResponseDto payloadDto = new BookingResponseDto(
+               booking.getId(),
+               user.getId(),
+               tour.getId()
+       );
+
+        outboxService.createAndSaveOutboxEvent(
+                EventType.TOUR_BOOKED,
+                String.valueOf(booking.getId()),
                 user.getId(),
-                tour.getId()
+                payloadDto
         );
+
+        return payloadDto;
     }
 
 
@@ -87,11 +102,23 @@ public class BookingServiceImpl implements BookingService {
     @Transactional
     public void cancelBooking(UUID userId, UUID tourId) {
 
-        bookingRepository.findByUserIdAndTourId(userId, tourId)
+        Booking booking = bookingRepository.findByUserIdAndTourId(userId, tourId)
                 .orElseThrow(() -> new NotFoundException("Booking not found"));
 
-        tourService.tourBookingIsCanceled(tourId);
-        bookingRepository.deleteByUserIdAndTourId(userId, tourId);
-    }
+        BookingResponseDto payloadDto = new BookingResponseDto(
+                booking.getId(),
+                booking.getUser().getId(),
+                booking.getTour().getId()
+        );
 
+        outboxService.createAndSaveOutboxEvent(
+                EventType.TOUR_CANCELLED,
+                String.valueOf(booking.getId()),
+                booking.getUser().getId(),
+                payloadDto
+        );
+
+        tourService.tourBookingIsCanceled(tourId);
+        bookingRepository.delete(booking);
+    }
 }

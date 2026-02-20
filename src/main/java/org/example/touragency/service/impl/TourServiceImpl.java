@@ -19,6 +19,8 @@ import org.example.touragency.model.entity.Tour;
 import org.example.touragency.model.entity.User;
 import org.example.touragency.repository.*;
 import org.example.touragency.security.SecurityUtils;
+import org.example.touragency.service.abstractions.OutboxService;
+import org.example.touragency.service.abstractions.RatingService;
 import org.example.touragency.service.abstractions.TourService;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.stereotype.Service;
@@ -41,12 +43,10 @@ public class TourServiceImpl implements TourService {
     private final TourRepository tourRepository;
     private final UserRepository userRepository;
     private final RatingRepository ratingRepository;
+    private final RatingCounterRepository ratingCounterRepository;
     private final FavTourRepository favTourRepository;
     private final BookingRepository bookingRepository;
-    private final OutboxEventRepository outboxEventRepository;
-    private final ObjectMapper objectMapper;
-
-
+    private final OutboxService outboxService;
 
 
     @PreAuthorize("hasRole('AGENCY')")
@@ -81,33 +81,18 @@ public class TourServiceImpl implements TourService {
                 .views(0L)
                 .build();
 
-                 tourRepository.save(newTour);
+        tourRepository.save(newTour);
 
-        try{
-            SystemEvent systemEvent = SystemEvent.builder()
-                    .eventType(EventType.TOUR_CREATED)
-                    .entityId(String.valueOf(newTour.getId()))
-                    .userId(agency.getId())
-                    .timestamp(LocalDateTime.now())
-                    .payload(newTour)
-                    .build();
+        TourResponseDto tourDto = toResponseDto(newTour);
 
-            OutboxEvent outboxEvent = new OutboxEvent();
-                    outboxEvent.setEventType(EventType.TOUR_CREATED);
-                    outboxEvent.setStatus(EventStatus.PENDING);
-                    outboxEvent.setPayload(objectMapper.writeValueAsString(systemEvent));
-                    outboxEvent.setCreatedAt(LocalDateTime.now());
+        outboxService.createAndSaveOutboxEvent(
+               EventType.TOUR_CREATED,
+               String.valueOf(newTour.getId()),
+               agency.getId(),
+               tourDto
+       );
 
-            outboxEventRepository.save(outboxEvent);
-
-            log.info("Tour created and outbox event saved for tour ID: {}", newTour.getId());
-
-        } catch(Exception e){
-            log.error("Failed to save outbox event for tour ID: {}", newTour.getId(), e);
-            throw new RuntimeException("Could not process tour creation", e);
-        }
-
-        return toResponseDto(newTour);
+        return tourDto;
 
     }
 
@@ -116,21 +101,31 @@ public class TourServiceImpl implements TourService {
     @Override
     @Transactional
     public void deleteTour(UUID agencyId, UUID tourId) {
-        Optional<User> agency = userRepository.findById(agencyId);
 
-        if (agency.isEmpty()) {
-            throw new NotFoundException("Agency not found");
+        userRepository.findById(agencyId)
+                .orElseThrow(() -> new NotFoundException("Agency not found"));
+
+        Tour existTour = tourRepository.findById(tourId)
+                .orElseThrow(() -> new NotFoundException("Tour not found"));
+
+        if (!existTour.getAgency().getId().equals(agencyId)) {
+            throw new ForbiddenException("Tour's Agency does not belong to this Agency");
         }
 
-        if (!agency.get().getRole().equals(Role.AGENCY)) {
-            throw new ForbiddenException("User is not an agency");
-        }
+        TourResponseDto payloadDto = toResponseDto(existTour);
+
+        outboxService.createAndSaveOutboxEvent(
+                EventType.TOUR_DELETED,
+                String.valueOf(existTour.getId()),
+                agencyId,
+                payloadDto
+        );
 
         ratingRepository.deleteByTourId(tourId);
-        ratingRepository.deleteByTourId(tourId);
+        ratingCounterRepository.deleteByTourId(tourId);
         favTourRepository.deleteByTourId(tourId);
         bookingRepository.deleteByTourId(tourId);
-        tourRepository.deleteById(tourId);
+        tourRepository.delete(existTour);
 
     }
 
@@ -156,13 +151,23 @@ public class TourServiceImpl implements TourService {
         existingTour.get().setCity(tourUpdateDto.getCity());
         existingTour.get().setPrice(tourUpdateDto.getPrice());
         existingTour.get().setSeatsTotal(tourUpdateDto.getSeatsTotal());
-        existingTour.get().setSeatsAvailable(tourUpdateDto.getSeatsTotal());
         existingTour.get().setStartDate(tourUpdateDto.getStartDate());
         existingTour.get().setReturnDate(tourUpdateDto.getReturnDate());
         existingTour.get().setNights(nights);
         existingTour.get().setHotel(tourUpdateDto.getHotel());
         tourRepository.save(existingTour.get());
-        return toResponseDto(existingTour.get());
+
+
+        TourResponseDto updatedTourDto = toResponseDto(existingTour.get());
+
+        outboxService.createAndSaveOutboxEvent(
+                EventType.TOUR_UPDATED,
+                String.valueOf(tourId),
+                agencyId,
+                updatedTourDto
+        );
+
+        return updatedTourDto;
 
 
 
@@ -188,22 +193,16 @@ public class TourServiceImpl implements TourService {
         }
 
         tour.get().setViews(tour.get().getViews() + 1L);
+        tourRepository.save(tour.get());
         return toResponseDto(tour.orElse(null));
     }
 
-    @PreAuthorize("hasRole('AGENCY')")
     @Override
     public List<TourResponseDto> getAllToursByAgencyId(UUID agencyId) {
 
-        User agency = userRepository.findById(agencyId)
-                .orElseThrow(() -> new NotFoundException("Agency not found"));
+        userRepository.findById(agencyId).orElseThrow(() -> new NotFoundException("Agency not found"));
 
-        if(!agency.getRole().equals(Role.AGENCY)) {
-            throw new ForbiddenException("User is not an agency");
-        }
-
-        return tourRepository.findAll().stream()
-                .filter(tour -> tour.getAgency().getId().equals(agencyId))
+        return tourRepository.findAllByAgencyId(agencyId).stream()
                 .map(this::toResponseDto)
                 .toList();
     }
@@ -219,6 +218,7 @@ public class TourServiceImpl implements TourService {
             tourRepository.save(tour);
         }
     }
+
     @Override
     @Transactional
     public void tourBookingIsCanceled(UUID tourId) {
@@ -259,20 +259,30 @@ public class TourServiceImpl implements TourService {
                 ).divide(BigDecimal.valueOf(100f))
         );
         tourRepository.save(tour.get());
-        return toResponseDto(tour.orElse(null));
+
+        TourResponseDto updatedTourDto = toResponseDto(tour.get());
+
+        outboxService.createAndSaveOutboxEvent(
+                EventType.TOUR_ADDED_DISCOUNT,
+                String.valueOf(tourId),
+                agencyId,
+                updatedTourDto
+        );
+
+        return updatedTourDto;
 
     }
 
     private TourResponseDto toResponseDto(Tour tour) {
-        Optional<User> agency = userRepository.findById(tour.getAgency().getId());
+        User agency = tour.getAgency();
 
-        if(agency.isEmpty()) {
-            throw new NotFoundException("Agency not found");
+        if(agency == null) {
+            throw new IllegalStateException("Database corruption: Tour " + tour.getId() + " has no assigned agency");
         }
         return TourResponseDto.builder()
                 .id(tour.getId())
-                .agencyName(agency.get().getFullName())
-                .agencyId(agency.get().getId())
+                .agencyName(agency.getFullName())
+                .agencyId(agency.getId())
                 .title(tour.getTitle())
                 .description(tour.getDescription())
                 .nights(calculatingNights(tour.getStartDate(), tour.getReturnDate()))
