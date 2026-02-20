@@ -3,6 +3,7 @@ package org.example.touragency.controller;
 import lombok.RequiredArgsConstructor;
 import org.example.touragency.dto.request.RatingDto;
 import org.example.touragency.dto.response.RatingResponseDto;
+import org.example.touragency.security.SecurityUtils;
 import org.example.touragency.service.abstractions.RatingService;
 import org.example.touragency.exception.ApiResponse;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ public class RatingController {
 
     @PostMapping
     public ResponseEntity<ApiResponse<RatingResponseDto>> giveRateToTour(@RequestBody RatingDto ratingDto) {
+        ratingDto.setUserId(SecurityUtils.getCurrentUserId());
         RatingResponseDto rating =  ratingService.addRating(ratingDto);
         return ResponseEntity.status(HttpStatus.CREATED).body(new ApiResponse<>(rating));
     }

@@ -181,17 +181,11 @@ public class TourServiceImpl implements TourService {
     }
 
     @Override
-    public TourResponseDto getTourById(UUID userId, UUID tourId) {
+    public TourResponseDto getTourById(UUID tourId) {
         Optional<Tour> tour = tourRepository.findById(tourId);
         if(tour.isEmpty()) {
             throw new NotFoundException("Tour not found");
         }
-
-        Optional<User> user = userRepository.findById(userId);
-        if(user.isEmpty()) {
-            throw new NotFoundException("User not found");
-        }
-
         tour.get().setViews(tour.get().getViews() + 1L);
         tourRepository.save(tour.get());
         return toResponseDto(tour.orElse(null));

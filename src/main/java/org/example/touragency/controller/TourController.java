@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.example.touragency.dto.request.TourAddDto;
 import org.example.touragency.dto.response.TourResponseDto;
 import org.example.touragency.dto.response.TourUpdateDto;
+import org.example.touragency.security.SecurityUtils;
 import org.example.touragency.service.abstractions.TourService;
 import org.example.touragency.exception.ApiResponse;
 import org.springframework.http.HttpStatus;
@@ -28,16 +29,18 @@ public class TourController {
     }
 
     @DeleteMapping("/{tourId}")
-    public ResponseEntity<ApiResponse<Void>> deleteTour(@PathVariable UUID agencyId, @PathVariable UUID tourId) {
-        tourService.deleteTour(agencyId,tourId);
+    public ResponseEntity<ApiResponse<Void>> deleteTour(@PathVariable UUID tourId) {
+        UUID currentAgencyId = SecurityUtils.getCurrentUserId();
+        tourService.deleteTour(currentAgencyId,tourId);
         return ResponseEntity.noContent().build();
     }
 
     @PutMapping("/{tourId}")
-    public ResponseEntity<ApiResponse<TourResponseDto>> updateTour(@PathVariable UUID agencyId,
+    public ResponseEntity<ApiResponse<TourResponseDto>> updateTour(
                                         @PathVariable UUID tourId,
                                         @RequestBody TourUpdateDto tourUpdateDto) {
-        TourResponseDto updatedTour = tourService.updateTour(agencyId,tourId,tourUpdateDto);
+        UUID currentAgencyId = SecurityUtils.getCurrentUserId();
+        TourResponseDto updatedTour = tourService.updateTour(currentAgencyId,tourId,tourUpdateDto);
         return ResponseEntity.ok(new ApiResponse<>(updatedTour));
     }
 
@@ -54,15 +57,16 @@ public class TourController {
     }
 
     @GetMapping("/{tourId}")
-    public ResponseEntity<ApiResponse<TourResponseDto>>  getTourById(@PathVariable UUID agencyId, @PathVariable UUID tourId) {
-        TourResponseDto tour = tourService.getTourById(agencyId, tourId);
+    public ResponseEntity<ApiResponse<TourResponseDto>>  getTourById(@PathVariable UUID tourId) {
+        TourResponseDto tour = tourService.getTourById(tourId);
         return ResponseEntity.ok(new ApiResponse<>(tour));
     }
 
     @PostMapping("/{tourId}")
     public ResponseEntity<ApiResponse<TourResponseDto>> addDiscount
-            (@PathVariable UUID agencyId, @PathVariable UUID tourId, @RequestBody Integer discountPercent ) {
-        TourResponseDto tour = tourService.addDiscount(agencyId,tourId,discountPercent);
+            (@PathVariable UUID tourId, @RequestBody Integer discountPercent ) {
+        UUID currentAgencyId = SecurityUtils.getCurrentUserId();
+        TourResponseDto tour = tourService.addDiscount(currentAgencyId,tourId,discountPercent);
         return ResponseEntity.ok(new ApiResponse<>(tour));
     }
 

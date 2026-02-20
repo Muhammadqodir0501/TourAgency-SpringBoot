@@ -42,9 +42,10 @@ public class UserController {
     }
 
    @PutMapping("/{userId}")
-    public ResponseEntity<ApiResponse<UserResponseDto>> updateUser(@PathVariable UUID userId,
-                                                                   @RequestBody UserUpdateDto userUpdateDto) {
-       UserResponseDto updatedUser = userService.updateUser(userId, userUpdateDto);
+    public ResponseEntity<ApiResponse<UserResponseDto>> updateUser(
+            @RequestBody UserUpdateDto userUpdateDto) {
+       UUID currentUserId = SecurityUtils.getCurrentUserId();
+       UserResponseDto updatedUser = userService.updateUser(currentUserId, userUpdateDto);
        return ResponseEntity.status(HttpStatus.OK).body(new ApiResponse<>(updatedUser));
    }
 
