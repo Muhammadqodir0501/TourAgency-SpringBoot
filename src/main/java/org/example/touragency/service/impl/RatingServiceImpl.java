@@ -3,6 +3,8 @@ package org.example.touragency.service.impl;
 import lombok.RequiredArgsConstructor;
 import org.example.touragency.dto.request.RatingDto;
 import org.example.touragency.dto.response.RatingResponseDto;
+import org.example.touragency.dto.response.TourResponseDto;
+import org.example.touragency.enums.EventType;
 import org.example.touragency.exception.NotFoundException;
 import org.example.touragency.model.entity.Rating;
 import org.example.touragency.model.entity.RatingCounter;
@@ -12,6 +14,7 @@ import org.example.touragency.repository.RatingCounterRepository;
 import org.example.touragency.repository.RatingRepository;
 import org.example.touragency.repository.TourRepository;
 import org.example.touragency.repository.UserRepository;
+import org.example.touragency.service.abstractions.OutboxService;
 import org.example.touragency.service.abstractions.RatingService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +31,7 @@ public class RatingServiceImpl implements RatingService {
     private final RatingCounterRepository ratingCounterRepository;
     private final TourRepository tourRepository;
     private final UserRepository userRepository;
+    private final OutboxService outboxService;
 
     @Override
     public RatingResponseDto addRating(RatingDto ratingDto) {
@@ -61,7 +65,16 @@ public class RatingServiceImpl implements RatingService {
         ratingCount(ratingDto);
         syncTourRatingFromCounter(tourId);
 
-        return toResponseDto(rating);
+        RatingResponseDto ratingResDto = toResponseDto(rating);
+
+        outboxService.createAndSaveOutboxEvent(
+                EventType.TOUR_RATED,
+                String.valueOf(rating.getId()),
+                userId,
+                ratingResDto
+        );
+
+        return ratingResDto;
     }
 
 
@@ -110,6 +123,15 @@ public class RatingServiceImpl implements RatingService {
 
             existRating.setRate(ratingDto.getRate());
             ratingRepository.save(existRating);
+
+            RatingResponseDto ratingResDto = toResponseDto(existRating);
+
+            outboxService.createAndSaveOutboxEvent(
+                    EventType.USER_RATING_UPDATED,
+                    String.valueOf(existRating.getId()),
+                    ratingDto.getUserId(),
+                    ratingResDto
+            );
 
         }
     }

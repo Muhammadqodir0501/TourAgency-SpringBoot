@@ -2,6 +2,7 @@ package org.example.touragency.service.impl;
 
 import lombok.RequiredArgsConstructor;
 import org.example.touragency.dto.response.FavTourResponseDto;
+import org.example.touragency.enums.EventType;
 import org.example.touragency.exception.ConflictException;
 import org.example.touragency.exception.NotFoundException;
 import org.example.touragency.model.entity.FavouriteTour;
@@ -11,6 +12,7 @@ import org.example.touragency.repository.FavTourRepository;
 import org.example.touragency.repository.TourRepository;
 import org.example.touragency.repository.UserRepository;
 import org.example.touragency.service.abstractions.FavouriteTourService;
+import org.example.touragency.service.abstractions.OutboxService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -25,6 +27,7 @@ public class FavouriteTourServiceImpl implements FavouriteTourService {
     private final FavTourRepository favTourRepository;
     private final TourRepository tourRepository;
     private  final UserRepository userRepository;
+    private final OutboxService outboxService;
 
 
     @Override
@@ -50,11 +53,20 @@ public class FavouriteTourServiceImpl implements FavouriteTourService {
 
         favTourRepository.save(favouriteTour);
 
-        return new FavTourResponseDto(
+        FavTourResponseDto resDto = new FavTourResponseDto(
                 favouriteTour.getId(),
                 user.getId(),
                 tour.getId()
         );
+
+        outboxService.createAndSaveOutboxEvent(
+                EventType.TOUR_LIKED,
+                String.valueOf(favouriteTour.getId()),
+                tourId,
+                resDto
+        );
+
+        return resDto;
     }
 
     @Override
@@ -66,6 +78,22 @@ public class FavouriteTourServiceImpl implements FavouriteTourService {
 
         userRepository.findById(userId)
                         .orElseThrow(() -> new NotFoundException("Agency not found"));
+
+        FavouriteTour favTour = favTourRepository.findByUserIdAndTourId(userId, tourId)
+                .orElseThrow(() -> new NotFoundException("Liked Tour not found"));
+
+        FavTourResponseDto resDto = new FavTourResponseDto(
+                favTour.getId(),
+                userId,
+                tourId
+        );
+
+        outboxService.createAndSaveOutboxEvent(
+                EventType.TOUR_UNLIKED,
+                String.valueOf(favTour.getId()),
+                tourId,
+                resDto
+        );
 
         favTourRepository.deleteByUserIdAndTourId(userId,tourId);
     }

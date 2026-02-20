@@ -11,10 +11,18 @@ public enum EventType {
     TOUR_CANCELLED("tour.booking.cancelled"),
     TOUR_NOT_FOUND("tour.error.not_found"),
     TOUR_ADDED_DISCOUNT("tour.booking.added.discount"),
+    TOUR_LIKED("tour.booking.liked"),
+    TOUR_UNLIKED("tour.booking.unliked"),
+
+    TOUR_RATED("tour.booking.rated"),
+    USER_RATING_UPDATED("user.booking.rating_updated"),
 
     USER_REGISTERED("user.auth.registered"),
-    USER_NOT_FOUND("user.error.not_found"),
-    LOGIN_FAILED("user.auth.login_failed");
+    AGENCY_CREATED("agency.booking.created"),
+    AGENCY_DELETED("agency.booking.deleted"),
+    USER_DELETED("user.booking.deleted"),
+    AGENCY_UPDATED("agency.booking.updated"),
+    USER_UPDATED("user.booking.updated");
 
     private final String routingKey;
 

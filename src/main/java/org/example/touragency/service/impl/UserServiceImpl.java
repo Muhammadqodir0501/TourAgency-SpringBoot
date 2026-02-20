@@ -41,8 +41,7 @@ public class UserServiceImpl implements UserService {
     private final TourRepository tourRepository;
     private final RatingCounterRepository ratingCounterRepository;
     private final PasswordEncoder passwordEncoder;
-    private final ObjectMapper objectMapper;
-    private final OutboxEventRepository outboxEventRepository;
+    private final OutboxService outboxService;
 
 
     @Transactional
@@ -70,30 +69,12 @@ public class UserServiceImpl implements UserService {
 
         userRepository.save(newUser);
 
-        try{
-            SystemEvent systemEvent = SystemEvent.builder()
-                    .eventType(EventType.USER_REGISTERED)
-                    .entityId(String.valueOf(newUser.getId()))
-                    .userId(newUser.getId())
-                    .timestamp(LocalDateTime.now())
-                    .payload(newUser)
-                    .build();
-
-            OutboxEvent outboxEvent = new OutboxEvent();
-            outboxEvent.setEventType(EventType.USER_REGISTERED);
-            outboxEvent.setStatus(EventStatus.PENDING);
-            outboxEvent.setPayload(objectMapper.writeValueAsString(systemEvent));
-            outboxEvent.setCreatedAt(LocalDateTime.now());
-
-            outboxEventRepository.save(outboxEvent);
-            log.info("User created and outbox event saved for user ID: {}", newUser.getId());
-
-        } catch (Exception e) {
-
-            log.error("Error occurred while saving user event", e);
-            throw new ConflictException("Error occurred while saving user event");
-        }
-
+        outboxService.createAndSaveOutboxEvent(
+                EventType.USER_REGISTERED,
+                String.valueOf(newUser.getId()),
+                newUser.getId(),
+                newUser
+        );
 
         return newUser;
     }
@@ -102,11 +83,21 @@ public class UserServiceImpl implements UserService {
     @Transactional
     public UserResponseDto addNewAgency(UUID agencyId) {
         User agency = userRepository.findById(agencyId)
-                .orElseThrow(() -> new NotFoundException("Agency not found"));
+                .orElseThrow(() -> new NotFoundException("User not found"));
 
         agency.setRole(Role.AGENCY);
         userRepository.save(agency);
-        return toResponseDto(agency);
+
+        UserResponseDto agencyDto = toResponseDto(agency);
+
+        outboxService.createAndSaveOutboxEvent(
+                EventType.AGENCY_CREATED,
+                String.valueOf(agencyId),
+                agencyId,
+                agencyDto
+        );
+
+        return agencyDto;
     }
 
     @Override
@@ -120,6 +111,15 @@ public class UserServiceImpl implements UserService {
 
             if (user.getRole() == Role.AGENCY) {
 
+                UserResponseDto payload = toResponseDto(user);
+
+                outboxService.createAndSaveOutboxEvent(
+                        EventType.AGENCY_DELETED,
+                        String.valueOf(user.getId()),
+                        user.getId(),
+                        payload
+                );
+
                 List<Tour> tours = tourRepository.findAllByAgencyId(user.getId());
 
                 for (Tour tour : tours) {
@@ -131,6 +131,17 @@ public class UserServiceImpl implements UserService {
 
                 tourRepository.deleteByAgencyId(user.getId());
             }
+
+            UserResponseDto payload = toResponseDto(user);
+
+            outboxService.createAndSaveOutboxEvent(
+                    EventType.USER_DELETED,
+                    String.valueOf(user.getId()),
+                    user.getId(),
+                    payload
+            );
+
+
             ratingRepository.deleteByUserId(userId);
             favTourRepository.deleteByUserId(userId);
             bookingRepository.deleteByUserId(userId);
@@ -167,9 +178,27 @@ public class UserServiceImpl implements UserService {
         user.setEmail(dto.getEmail());
         user.setPassword(dto.getPassword());
         user.setPhoneNumber(dto.getPhoneNumber());
-
         userRepository.save(user);
-        return toResponseDto(user);
+
+        UserResponseDto updatedUserDto = toResponseDto(user);
+
+        if(user.getRole() == Role.AGENCY){
+            outboxService.createAndSaveOutboxEvent(
+                    EventType.AGENCY_UPDATED,
+                    String.valueOf(user.getId()),
+                    user.getId(),
+                    updatedUserDto
+            );
+        }else {
+            outboxService.createAndSaveOutboxEvent(
+                    EventType.AGENCY_UPDATED,
+                    String.valueOf(user.getId()),
+                    user.getId(),
+                    updatedUserDto
+            );
+        }
+
+        return updatedUserDto;
     }
 
 
